@@ -1,23 +1,24 @@
 'use server'
-
 import { revalidatePath } from 'next/cache'
-
 import { connectToDatabase } from '@/lib/database'
 import User from '@/lib/database/models/user.model'
 import Order from '@/lib/database/models/order.model'
 import Event from '@/lib/database/models/event.model'
 import { handleError } from '@/lib/utils'
-
 import { CreateUserParams, UpdateUserParams } from '@/types'
 
 export async function createUser(user: CreateUserParams) {
   try {
-    await connectToDatabase()
+    await connectToDatabase();
+    console.log('Creating user with data:', user);  // Log user data before creating
 
-    const newUser = await User.create(user)
-    return JSON.parse(JSON.stringify(newUser))
+    const newUser = await User.create(user);
+
+    console.log('User created successfully:', newUser);
+    return JSON.parse(JSON.stringify(newUser));  // Ensure response is correctly formatted
   } catch (error) {
-    handleError(error)
+    console.error('Error creating user:', error);  // Log any error in user creation
+    handleError(error);  // Optionally, handle specific errors
   }
 }
 
@@ -36,46 +37,55 @@ export async function getUserById(userId: string) {
 
 export async function updateUser(clerkId: string, user: UpdateUserParams) {
   try {
-    await connectToDatabase()
+    await connectToDatabase();
+    console.log('Updating user with clerkId:', clerkId, 'and data:', user);  // Log the data being updated
 
-    const updatedUser = await User.findOneAndUpdate({ clerkId }, user, { new: true })
+    const updatedUser = await User.findOneAndUpdate({ clerkId }, user, { new: true });
 
-    if (!updatedUser) throw new Error('User update failed')
-    return JSON.parse(JSON.stringify(updatedUser))
+    if (!updatedUser) throw new Error('User update failed');
+    
+    console.log('User updated successfully:', updatedUser);
+    return JSON.parse(JSON.stringify(updatedUser));
   } catch (error) {
-    handleError(error)
+    console.error('Error updating user:', error);  // Log any error in user update
+    handleError(error);
   }
 }
 
+
 export async function deleteUser(clerkId: string) {
   try {
-    await connectToDatabase()
+    await connectToDatabase();
+    console.log('Deleting user with clerkId:', clerkId);  // Log the user being deleted
 
-    // Find user to delete
-    const userToDelete = await User.findOne({ clerkId })
-
+    // Find the user to delete
+    const userToDelete = await User.findOne({ clerkId });
     if (!userToDelete) {
-      throw new Error('User not found')
+      throw new Error('User not found');
     }
 
     // Unlink relationships
     await Promise.all([
-      // Update the 'events' collection to remove references to the user
-      Event.updateMany(
-        { _id: { $in: userToDelete.events } },
-        { $pull: { organizer: userToDelete._id } }
-      ),
+      // Update 'events' collection to remove user references
+      Event.updateMany({ _id: { $in: userToDelete.events } }, { $pull: { organizer: userToDelete._id } }),
 
-      // Update the 'orders' collection to remove references to the user
+      // Update 'orders' collection to remove user references
       Order.updateMany({ _id: { $in: userToDelete.orders } }, { $unset: { buyer: 1 } }),
-    ])
+    ]);
 
-    // Delete user
-    const deletedUser = await User.findByIdAndDelete(userToDelete._id)
-    revalidatePath('/')
+    // Delete the user
+    const deletedUser = await User.findByIdAndDelete(userToDelete._id);
+    revalidatePath('/');
 
-    return deletedUser ? JSON.parse(JSON.stringify(deletedUser)) : null
+    if (deletedUser) {
+      console.log('User deleted successfully:', deletedUser);
+      return JSON.parse(JSON.stringify(deletedUser));
+    } else {
+      console.error('Failed to delete user');
+      return null;
+    }
   } catch (error) {
-    handleError(error)
+    console.error('Error deleting user:', error);  // Log any error in user deletion
+    handleError(error);
   }
 }
